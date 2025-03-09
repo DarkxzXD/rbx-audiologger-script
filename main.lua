@@ -4,6 +4,24 @@ wait(0.2)
 GUI = aa.PopupFrame.PopupFrame
 pos = 0
 
+-- Auto-scroll toggle variable
+local autoScrollEnabled = true
+
+-- Auto-scroll toggle button
+local AutoScrollToggle = Instance.new("TextButton")
+AutoScrollToggle.Parent = GUI
+AutoScrollToggle.Size = UDim2.new(0, 100, 0, 30)
+AutoScrollToggle.Position = UDim2.new(0.75, 0, 0.05, 0)
+AutoScrollToggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AutoScrollToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoScrollToggle.Text = "Auto-Scroll: ON"
+
+-- Toggle Function
+AutoScrollToggle.MouseButton1Click:Connect(function()
+    autoScrollEnabled = not autoScrollEnabled
+    AutoScrollToggle.Text = "Auto-Scroll: " .. (autoScrollEnabled and "ON" or "OFF")
+end)
+
 ignore = {
 	"rbxasset://sounds/action_get_up.mp3",
 	"rbxasset://sounds/uuhhh.mp3",
@@ -193,69 +211,81 @@ end)
 
 selectedaudio = nil
 function getaudio(place)
-	if running == false then
-		GUI.Load.Visible = true running = true
-		GUI.Load:TweenSize(UDim2.new(0, 360, 0, 20),"Out","Quad",0.5,true) wait(0.3)
-		for _, child in pairs(place:GetDescendants()) do
-			spawn(function()
-				if child:IsA("Sound") and not GUI.Logs:FindFirstChild(child.SoundId) and not FindTable(ignore,child.SoundId) then
-					local id = string.match(child.SoundId, "rbxasset://sounds.+") or string.match(child.SoundId, "&hash=.+") or string.match(child.SoundId, "%d+")
-					if id ~= nil then		
-						local newsound = GUI.Audio:Clone()
-						if string.sub(id, 1, 6) == "&hash=" or string.sub(id, 1, 7) == "&0hash=" then
-							id = string.sub(id, (string.sub(id, 1, 6) == "&hash=" and 7) or (string.sub(id, 1, 7) == "&0hash=" and 8), string.len(id))
-							newsound.ImageButton.Image = 'rbxassetid://1453863294'
-						end
-						newsound.Parent = GUI.Logs
-						newsound.Name = child.SoundId
-						newsound.Visible = true
-						newsound.Position = UDim2.new(0,0,0, pos)
-						GUI.Logs.CanvasSize = UDim2.new(0,0,0, pos+20)
-						pos = pos+20
-						local function findname()
-							Asset = game:GetService("MarketplaceService"):GetProductInfo(id)
-						end
-						local audioname = 'error'
-						local success, message = pcall(findname)
-						if success then
-    						newsound.TextLabel.Text = Asset.Name
-							audioname = Asset.Name
-						else
-							newsound.TextLabel.Text = child.Name
-							audioname = child.Name
-						end
-						local data = Instance.new('StringValue') data.Parent = newsound data.Value = child.SoundId data.Name = 'ID'
-						local data2 = Instance.new('StringValue') data2.Parent = newsound data2.Value = audioname data2.Name = 'NAME'
-						local soundselected = false
-						newsound.ImageButton.MouseButton1Click:Connect(function()
-							if GUI.Info.Visible ~= true then
-								if soundselected == false then soundselected = true
-									newsound.ImageButton.BackgroundTransparency = 0
-								else soundselected = false
-									newsound.ImageButton.BackgroundTransparency = 1
-								end
-							end
-						end)
-						newsound.Click.MouseButton1Click:Connect(function()
-							if GUI.Info.Visible ~= true then
-								GUI.Info.TextLabel.Text = "Name: " ..audioname.. "\n\nID: " .. child.SoundId .. "\n\nWorkspace Name: " .. child.Name
-								selectedaudio = child.SoundId
-								GUI.Info.Visible = true
-							end
-						end)
-					end
-				end
-			end)
-		end
-	end
-	for rep = 1,10 do
-		GUI.Load.BackgroundTransparency = GUI.Load.BackgroundTransparency + 0.1
-		wait(0.05)
-	end
-	GUI.Load.Visible = false
-	GUI.Load.BackgroundTransparency = 0
-	GUI.Load.Size = UDim2.new(0, 0, 0, 20)
-	running = false
+    if running == false then
+        GUI.Load.Visible = true 
+        running = true
+        GUI.Load:TweenSize(UDim2.new(0, 360, 0, 20), "Out", "Quad", 0.5, true) 
+        wait(0.3)
+
+        for _, child in pairs(place:GetDescendants()) do
+            spawn(function()
+                if child:IsA("Sound") and not GUI.Logs:FindFirstChild(child.SoundId) and not FindTable(ignore, child.SoundId) then
+                    local soundId = child.SoundId
+                    local soundName = child.Name
+
+                    -- **Filter only sound assets that contain "[SPELLING]" or "SPELLING"**
+                    if string.find(soundName, "%[SPELLING%]") or string.find(soundName, "SPELLING") then
+                        local id = string.match(soundId, "%d+")
+
+                        if id ~= nil then
+                            local newsound = GUI.Audio:Clone()
+                            newsound.Parent = GUI.Logs
+                            newsound.Name = child.SoundId
+                            newsound.Visible = true
+                            newsound.Position = UDim2.new(0, 0, 0, pos)
+
+                            -- **Check if auto-scroll is enabled**
+                            local shouldScroll = autoScrollEnabled and (GUI.Logs.CanvasPosition.Y == GUI.Logs.CanvasSize.Y.Offset - 230)
+
+                            GUI.Logs.CanvasSize = UDim2.new(0, 0, 0, pos + 20)
+                            pos = pos + 20
+
+                            -- **Retrieve asset name from MarketplaceService**
+                            local function getName()
+                                Asset = game:GetService("MarketplaceService"):GetProductInfo(id)
+                            end
+
+                            local assetName = "Unknown"
+                            local success, message = pcall(getName)
+                            if success then
+                                newsound.TextLabel.Text = Asset.Name
+                                assetName = Asset.Name
+                            else
+                                newsound.TextLabel.Text = soundName
+                                assetName = soundName
+                            end
+
+                            -- Store Sound Data
+                            local data = Instance.new("StringValue")
+                            data.Parent = newsound
+                            data.Value = child.SoundId
+                            data.Name = "ID"
+
+                            local data2 = Instance.new("StringValue")
+                            data2.Parent = newsound
+                            data2.Value = assetName
+                            data2.Name = "NAME"
+
+                            -- **Auto-scroll if enabled**
+                            if shouldScroll then
+                                GUI.Logs.CanvasPosition = Vector2.new(0, GUI.Logs.CanvasSize.Y.Offset)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
+    for rep = 1, 10 do
+        GUI.Load.BackgroundTransparency = GUI.Load.BackgroundTransparency + 0.1
+        wait(0.05)
+    end
+
+    GUI.Load.Visible = false
+    GUI.Load.BackgroundTransparency = 0
+    GUI.Load.Size = UDim2.new(0, 0, 0, 20)
+    running = false
 end
 
 GUI.All.MouseButton1Click:connect(function() getaudio(game)end)
