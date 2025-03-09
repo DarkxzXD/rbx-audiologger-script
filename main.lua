@@ -1,110 +1,64 @@
 -- Load Rayfield Interface Suite
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Initialize Audio Assets Table
-local AudioAssets = {}
+-- Create Main Window (No Tabs, Everything is Here)
+local Window = Rayfield:CreateWindow({
+    Name = "Audio Logger",
+    LoadingTitle = "Detecting Sounds...",
+    LoadingSubtitle = "Please wait",
+    ConfigurationSaving = { Enabled = false }
+})
 
--- Define Save Directory and File Path
-local SaveDirectory = "/storage/emulated/0/Saved Sound IDS/"
-local SaveFilePath = SaveDirectory .. "saved_assets.json"
+-- Create Console Section in Main Menu
+local ConsoleSection = Window:CreateSection("Detected Sounds")
 
--- Ensure Save Directory Exists
-if makefolder then
-    pcall(makefolder, SaveDirectory)
+-- Create Console Log (Dynamic Label)
+local ConsoleLog = Window:CreateParagraph({Title = "Sound Log", Content = "Listening for sounds...", FontSize = 14})
+
+-- JSON Storage for Persisting Data
+local HttpService = game:GetService("HttpService")
+local SavePath = "/storage/emulated/0/Saved Sound IDS/AudioAssets.json"
+local AudioData = {}
+
+-- Ensure Save Directory Exists (For Compatible Executors)
+if makefolder then pcall(makefolder, "/storage/emulated/0/Saved Sound IDS/") end
+
+-- Load Existing Data If Available
+if pcall(function() readfile(SavePath) end) then
+    local data = readfile(SavePath)
+    AudioData = HttpService:JSONDecode(data)
 end
 
--- Function to Fetch Audio Assets
-local function FetchAudioAssets()
+-- Function to Detect and Update Sounds
+local function UpdateSoundLog()
+    local logText = ""
     for _, obj in pairs(game:GetDescendants()) do
         if obj:IsA("Sound") and obj.SoundId:find("rbxassetid://") then
-            local assetId = obj.SoundId
-            if not AudioAssets[assetId] then
-                AudioAssets[assetId] = {
-                    ID = assetId,
-                    Name = "Unknown Sound",
-                    Duration = obj.TimeLength or "Unknown"
-                }
+            local soundId = obj.SoundId
+            local soundName = obj.Name or "Unnamed Sound"
+
+            -- Save Data Automatically
+            if not AudioData[soundId] then
+                AudioData[soundId] = soundName
+                writefile(SavePath, HttpService:JSONEncode(AudioData))
             end
+
+            -- Add to Log Text
+            logText = logText .. soundId .. " → " .. soundName .. "\n"
         end
     end
+
+    -- Update Console Log in the GUI
+    ConsoleLog:Set({Title = "Sound Log", Content = logText})
 end
 
--- Fetch Audio Assets on Startup
-FetchAudioAssets()
-
--- Create Main Window
-local Window = Rayfield:CreateWindow({
-    Name = "Spelling Bee - Audio Manager",
-    LoadingTitle = "Initializing...",
-    LoadingSubtitle = "Fetching audio assets...",
-    ConfigurationSaving = { Enabled = true, FileName = "SpellingBeeAudioConfig" }
-})
-
--- Create Main Tab
-local MainTab = Window:CreateTab("Audio Manager", "Music")
-
--- Function to Refresh Audio List in GUI
-local function RefreshAudioList()
-    MainTab:Clear()
-    for assetId, data in pairs(AudioAssets) do
-        MainTab:CreateButton({
-            Name = data.Name,
-            Callback = function()
-                Rayfield:Prompt({
-                    Title = "Rename Audio",
-                    Text = "Enter a new name for the selected audio:",
-                    Placeholder = data.Name,
-                    Buttons = {
-                        { Name = "Save", Callback = function(newName)
-                            if newName and newName ~= "" then
-                                AudioAssets[assetId].Name = newName
-                                RefreshAudioList()
-                                Rayfield:Notify({
-                                    Title = "Success",
-                                    Content = "Audio renamed to " .. newName,
-                                    Duration = 3
-                                })
-                            else
-                                Rayfield:Notify({
-                                    Title = "Error",
-                                    Content = "Invalid name entered.",
-                                    Duration = 3
-                                })
-                            end
-                        end },
-                        { Name = "Cancel" }
-                    }
-                })
-            end
-        })
-    end
-end
-
--- Initial GUI Population
-RefreshAudioList()
-
--- Button to Save Audio Data to JSON
-MainTab:CreateButton({
-    Name = "Save to JSON",
-    Callback = function()
-        local JsonData = game:GetService("HttpService"):JSONEncode(AudioAssets)
-        writefile(SaveFilePath, JsonData)
-        Rayfield:Notify({
-            Title = "Data Saved",
-            Content = "Audio data successfully saved to: " .. SaveFilePath,
-            Duration = 5
-        })
-    end
-})
-
--- Auto-Detect New Sounds Every 10 Seconds
+-- Auto-Update the Console Every 5 Seconds
 task.spawn(function()
     while true do
-        FetchAudioAssets()
-        RefreshAudioList()
-        task.wait(1.5)
+        UpdateSoundLog()
+        task.wait(5)
     end
 end)
 
--- Load Configuration on Startup
-Rayfield:LoadConfiguration()
+-- Load Initial Data
+UpdateSoundLog()
