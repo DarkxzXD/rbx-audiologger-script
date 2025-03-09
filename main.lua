@@ -1,136 +1,110 @@
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-local HttpService = game:GetService("HttpService")
+-- Load Rayfield Interface Suite
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local directory = "/storage/emulated/0/Saved Sound IDS/"
-local loggedSounds = {} -- Prevent duplicate saves
+-- Initialize Audio Assets Table
+local AudioAssets = {}
 
--- 🔹 Ensure directory exists (Requires exploit support)
-if not isfolder(directory) then
-    makefolder(directory)
+-- Define Save Directory and File Path
+local SaveDirectory = "/storage/emulated/0/Saved Sound IDS/"
+local SaveFilePath = SaveDirectory .. "saved_assets.json"
+
+-- Ensure Save Directory Exists
+if makefolder then
+    pcall(makefolder, SaveDirectory)
 end
 
--- 🔹 Create the GUI Window
-local Window = Rayfield:CreateWindow({
-    Name = "Frosted's Audio Logger",
-    LoadingTitle = "Scanning for Sounds...",
-    LoadingSubtitle = "by FrosteddXD <3",
-    ConfigurationSaving = {Enabled = false}
-})
-
--- 🔹 Create a New Tab for Audio Logging
-local SoundTab = Window:CreateTab("Sound Logger")
-local SoundLabel = SoundTab:CreateLabel("Detected Sound Assets:")
-local Console = SoundTab:CreateParagraph({Title = "Live Console", Content = "No assets found yet..."})
-
--- 🔹 Function to Log Unique Sound Assets
-local function logAudioAssets()
-    local newEntries = {}
-
+-- Function to Fetch Audio Assets
+local function FetchAudioAssets()
     for _, obj in pairs(game:GetDescendants()) do
-        if obj:IsA("Sound") and obj.SoundId ~= "" then
-            local assetId = obj.SoundId:gsub("rbxassetid://", "") -- Extract just the numeric ID
-
-            if not loggedSounds[assetId] then
-                loggedSounds[assetId] = true
-                table.insert(newEntries, "rbxassetid://" .. assetId)
-
-                -- Save MP3 file using asset ID format
-                saveAsMP3(assetId)
+        if obj:IsA("Sound") and obj.SoundId:find("rbxassetid://") then
+            local assetId = obj.SoundId
+            if not AudioAssets[assetId] then
+                AudioAssets[assetId] = {
+                    ID = assetId,
+                    Name = "Unknown Sound",
+                    Duration = obj.TimeLength or "Unknown"
+                }
             end
         end
     end
+end
 
-    -- 🔹 If new entries exist, save to a text file and update the console
-    if #newEntries > 0 then
-        local filename = os.date("%Y-%m-%d_%H-%M-%S") .. ".txt"
-        local filepath = directory .. filename
-        appendfile(filepath, table.concat(newEntries, "\n") .. "\n")
+-- Fetch Audio Assets on Startup
+FetchAudioAssets()
 
-        -- Update Console UI
-        local content = table.concat(newEntries, "\n")
-        Console:Set({Title = "Live Console", Content = content ~= "" and content or "No assets found yet..."})
+-- Create Main Window
+local Window = Rayfield:CreateWindow({
+    Name = "Spelling Bee - Audio Manager",
+    LoadingTitle = "Initializing...",
+    LoadingSubtitle = "Fetching audio assets...",
+    ConfigurationSaving = { Enabled = true, FileName = "SpellingBeeAudioConfig" }
+})
 
-        Rayfield:Notify({Title = "New Sounds Logged!", Content = "Saved to: " .. filepath, Duration = 3})
+-- Create Main Tab
+local MainTab = Window:CreateTab("Audio Manager", "Music")
+
+-- Function to Refresh Audio List in GUI
+local function RefreshAudioList()
+    MainTab:Clear()
+    for assetId, data in pairs(AudioAssets) do
+        MainTab:CreateButton({
+            Name = data.Name,
+            Callback = function()
+                Rayfield:Prompt({
+                    Title = "Rename Audio",
+                    Text = "Enter a new name for the selected audio:",
+                    Placeholder = data.Name,
+                    Buttons = {
+                        { Name = "Save", Callback = function(newName)
+                            if newName and newName ~= "" then
+                                AudioAssets[assetId].Name = newName
+                                RefreshAudioList()
+                                Rayfield:Notify({
+                                    Title = "Success",
+                                    Content = "Audio renamed to " .. newName,
+                                    Duration = 3
+                                })
+                            else
+                                Rayfield:Notify({
+                                    Title = "Error",
+                                    Content = "Invalid name entered.",
+                                    Duration = 3
+                                })
+                            end
+                        end },
+                        { Name = "Cancel" }
+                    }
+                })
+            end
+        })
     end
 end
 
--- 🔹 Function to Save Audio as MP3
-local function saveAsMP3(assetId)
-    local mp3Filename = "rbxassetid://" .. assetId .. ".mp3"
-    local mp3Path = directory .. mp3Filename
+-- Initial GUI Population
+RefreshAudioList()
 
-    -- Attempt to download the sound as MP3 (Requires exploit with `request()`)
-    local url = "https://api.roblox.com/asset/?id=" .. assetId
-    local response = request({Url = url, Method = "GET"})
-
-    if response and response.StatusCode == 200 then
-        writefile(mp3Path, response.Body)
-        print("[Audio Logger] MP3 saved: " .. mp3Path)
-    else
-        print("[Audio Logger] Failed to download: " .. assetId)
-    end
-end
-
--- 🔹 Auto-Scan Toggle
-local autoScanEnabled = true
-local AutoScanToggle = SoundTab:CreateToggle({
-    Name = "Auto-Scan Every 5s",
-    CurrentValue = true,
-    Callback = function(state)
-        autoScanEnabled = state
-    end
-})
-
--- 🔹 UI Buttons
-SoundTab:CreateButton({
-    Name = "Scan Sound Assets",
+-- Button to Save Audio Data to JSON
+MainTab:CreateButton({
+    Name = "Save to JSON",
     Callback = function()
-        logAudioAssets()
+        local JsonData = game:GetService("HttpService"):JSONEncode(AudioAssets)
+        writefile(SaveFilePath, JsonData)
+        Rayfield:Notify({
+            Title = "Data Saved",
+            Content = "Audio data successfully saved to: " .. SaveFilePath,
+            Duration = 5
+        })
     end
 })
 
-SoundTab:CreateButton({
-    Name = "Save Sound IDs to Text File",
-    Callback = function()
-        local filename = os.date("%Y-%m-%d_%H-%M-%S") .. ".txt"
-        local filepath = directory .. filename
-        local content = ""
-
-        for assetId, _ in pairs(loggedSounds) do
-            content = content .. "rbxassetid://" .. assetId .. "\n"
-        end
-
-        writefile(filepath, content)
-        Rayfield:Notify({Title = "Sound IDs Saved!", Content = "Saved to: " .. filepath, Duration = 3})
-    end
-})
-
-SoundTab:CreateButton({
-    Name = "Download All as MP3",
-    Callback = function()
-        for assetId, _ in pairs(loggedSounds) do
-            saveAsMP3(assetId)
-        end
-    end
-})
-
--- 🔹 Typing Delay Slider (For Future Customization)
-SoundTab:CreateSlider({
-    Name = "Scan Speed (Seconds)",
-    Range = {1, 10},
-    Increment = 1,
-    CurrentValue = 5,
-    Callback = function(value)
-        scanDelay = value
-    end
-})
-
--- 🔹 Auto-Scan Every 5 Seconds (Only if Enabled)
+-- Auto-Detect New Sounds Every 10 Seconds
 task.spawn(function()
     while true do
-        task.wait(5)
-        if autoScanEnabled then
-            logAudioAssets()
-        end
+        FetchAudioAssets()
+        RefreshAudioList()
+        task.wait(1.5)
     end
 end)
+
+-- Load Configuration on Startup
+Rayfield:LoadConfiguration()
