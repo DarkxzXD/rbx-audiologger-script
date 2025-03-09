@@ -1,7 +1,7 @@
 -- Load Rayfield Interface Suite
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Create Main Window (No Tabs, Everything is Here)
+-- Create Main Window (No Tabs, Everything in One Menu)
 local Window = Rayfield:CreateWindow({
     Name = "Audio Logger",
     LoadingTitle = "Detecting Sounds...",
@@ -24,7 +24,7 @@ local AudioData = {}
 if makefolder then pcall(makefolder, "/storage/emulated/0/Saved Sound IDS/") end
 
 -- Load Existing Data If Available
-if pcall(function() readfile(SavePath) end) then
+if pcall(function() return readfile(SavePath) end) then
     local data = readfile(SavePath)
     AudioData = HttpService:JSONDecode(data)
 end
@@ -32,8 +32,10 @@ end
 -- Function to Detect and Update Sounds
 local function UpdateSoundLog()
     local logText = ""
-    for _, obj in pairs(game:GetDescendants()) do
-        if obj:IsA("Sound") and obj.SoundId:find("rbxassetid://") then
+    local foundSounds = false
+
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("Sound") and obj.SoundId:match("rbxassetid://%d+") then
             local soundId = obj.SoundId
             local soundName = obj.Name or "Unnamed Sound"
 
@@ -45,11 +47,16 @@ local function UpdateSoundLog()
 
             -- Add to Log Text
             logText = logText .. soundId .. " → " .. soundName .. "\n"
+            foundSounds = true
         end
     end
 
     -- Update Console Log in the GUI
-    ConsoleLog:Set({Title = "Sound Log", Content = logText})
+    if foundSounds then
+        ConsoleLog:Set({Title = "Sound Log", Content = logText})
+    else
+        ConsoleLog:Set({Title = "Sound Log", Content = "No sounds detected."})
+    end
 end
 
 -- Auto-Update the Console Every 5 Seconds
@@ -60,5 +67,5 @@ task.spawn(function()
     end
 end)
 
--- Load Initial Data
+-- Initial Run
 UpdateSoundLog()
